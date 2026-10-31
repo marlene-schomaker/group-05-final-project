@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
-import { setupDatabase } from './db/init.js';
 
 dotenv.config();
 
@@ -21,8 +20,6 @@ app.get('/', (req, res) => {
 });
 
 async function startServer() {
-    await setupDatabase();
-
     app.listen(PORT, () => {
         console.log(`Server is listening on port ${PORT}`);
     });
