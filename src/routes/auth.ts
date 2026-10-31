@@ -8,7 +8,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
 router.post('/register', async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { name, email, password } = req.body;
         if(!email || !password) {
             return res.status(400).json({error: "Email and password are required"});
         }
@@ -27,11 +27,11 @@ router.post('/register', async (req, res) => {
 
         const newUser = await db   
             .insertInto('users')
-            .values({email, password_hash})
-            .returning(['id', 'email', 'created_at'])
+            .values({name, email, password_hash})
+            .returning(['user_id', 'name', 'email'])
             .executeTakeFirstOrThrow();
         
-        const token = jwt.sign({user_id: newUser.id, email: newUser.email}, JWT_SECRET, {
+        const token = jwt.sign({user_id: newUser.user_id, email: newUser.email}, JWT_SECRET, {
             expiresIn: '1h',
         });
 
@@ -60,7 +60,7 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials'});
         }
 
-        const token = jwt.sign({user_id: user.id, email: user.email}, JWT_SECRET, {
+        const token = jwt.sign({user_id: user.user_id, email: user.email}, JWT_SECRET, {
             expiresIn: '1h',
         });
         return res.json({token});
