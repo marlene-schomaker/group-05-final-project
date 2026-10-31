@@ -8,9 +8,10 @@
   },
   "scripts": {
     "test": "vitest run",
-    "start": "tsx src/index.ts",
+    "start": "tsx src/app.ts",
     "build": "tsc",
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch src/app.ts",
+    "db:init": "tsx src/db/init.ts",
     "migrate:up": "tsx src/db/migrator.ts up",
     "migrate:down": "tsx src/db/migrator.ts down",
     "test:watch": "vitest",
@@ -31,21 +32,26 @@
   },
   "homepage": "https://github.com/marlene-schomaker/group-05-final-project#readme",
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.3",
+    "jsonwebtoken": "^9.0.3",
     "kysely": "^0.27.6",
     "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
   "allowScripts": {
+    "bcrypt@6.0.0": true,
     "esbuild@0.28.2": true
   }
 }
