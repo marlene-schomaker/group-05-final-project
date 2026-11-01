@@ -43,9 +43,44 @@ export async function up(db: Kysely<any>): Promise<void> {
       col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull(),
     )
     .execute();
+
+  await db.schema
+    .createTable('events')
+    .addColumn('id', 'serial', (col) => col.primaryKey())
+    .addColumn('group_id', 'integer', (col) =>
+      col.references('groups.id').onDelete('cascade').notNull(),
+    )
+    .addColumn('organizer_id', 'integer', (col) =>
+      col.references('users.id').onDelete('cascade').notNull(),
+    )
+    .addColumn('title', 'varchar(200)', (col) => col.notNull())
+    .addColumn('duration_minutes', 'integer', (col) => col.notNull())
+    .addColumn('min_attendees', 'integer', (col) => col.notNull())
+    .addColumn('status', 'varchar(20)', (col) =>
+      col.defaultTo('proposed').notNull(),
+    )
+    .addColumn('scheduled_start', 'timestamptz')
+    .addColumn('created_at', 'timestamptz', (col) =>
+      col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull(),
+    )
+    .addCheckConstraint(
+      'events_status_check',
+      sql`status IN ('proposed', 'scheduled')`,
+    )
+    .addCheckConstraint(
+      'events_scheduled_has_start',
+      sql`(status = 'scheduled' AND scheduled_start IS NOT NULL)
+        OR (status = 'proposed' AND scheduled_start IS NULL)`,
+    )
+    .addCheckConstraint(
+      'events_positive_numbers',
+      sql`duration_minutes > 0 AND min_attendees > 0`,
+    )
+    .execute();
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
+  await db.schema.dropTable('events').ifExists().execute();
   await db.schema.dropTable('saved_schedules').ifExists().execute();
   await db.schema.dropTable('group_members').ifExists().execute();
   await db.schema.dropTable('groups').ifExists().execute();
