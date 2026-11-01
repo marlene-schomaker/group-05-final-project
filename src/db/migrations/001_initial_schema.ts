@@ -77,9 +77,31 @@ export async function up(db: Kysely<any>): Promise<void> {
       sql`duration_minutes > 0 AND min_attendees > 0`,
     )
     .execute();
+
+  await db.schema
+    .createTable('time_blocks')
+    .addColumn('id', 'serial', (col) => col.primaryKey())
+    .addColumn('user_id', 'integer', (col) =>
+      col.references('users.id').onDelete('cascade').notNull(),
+    )
+    .addColumn('saved_schedule_id', 'integer', (col) =>
+      col.references('saved_schedules.id').onDelete('cascade'),
+    )
+    .addColumn('event_id', 'integer', (col) =>
+      col.references('events.id').onDelete('cascade'),
+    )
+    .addColumn('start_at', 'timestamptz', (col) => col.notNull())
+    .addColumn('end_at', 'timestamptz', (col) => col.notNull())
+    .addCheckConstraint('time_blocks_valid_range', sql`end_at > start_at`)
+    .addCheckConstraint(
+      'time_blocks_one_owner',
+      sql`(saved_schedule_id IS NOT NULL) <> (event_id IS NOT NULL)`,
+    )
+    .execute();
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
+  await db.schema.dropTable('time_blocks').ifExists().execute();
   await db.schema.dropTable('events').ifExists().execute();
   await db.schema.dropTable('saved_schedules').ifExists().execute();
   await db.schema.dropTable('group_members').ifExists().execute();
