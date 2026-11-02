@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Workspace Profile</title>
+    <style>
+        body { margin: 0; font-family: sans-serif; background-color: #f0fdfa; }
+        nav { display: flex; gap: 16px; padding: 16px; background-color: #1e293b; }
+        nav a { color: #fff; text-decoration: none; font-size: 16px; }
+        nav a.active { font-weight: bold; text-decoration: underline; }
+        .container { max-width: 1000px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; border: 1px solid #cbd5e1; display: flex; flex-direction: column; gap: 24px; }
+        .header-row { display: flex; justify-content: space-between; align-items: center; }
+        .btn-success { background: #10b981; color: white; padding: 10px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .alert-banner { background: #fee2e2; padding: 14px; border-radius: 6px; border-left: 4px solid #ef4444; }
+        .event-card { border: 1px solid #e2e8f0; padding: 16px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
+        .btn-group { display: flex; gap: 8px; }
+        .btn-go { background: #22c55e; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-nogo { background: #ef4444; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .roster-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+        .roster-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #f1f5f9; background: #fff; }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="group.html" class="active">Group Workspace</a>
+        <a href="schedule.html">Timeline Scheduler</a>
+    </nav>
+
+    <div class="container">
+        <div class="header-row">
+            <h1 style="margin:0; color:#1e293b;">Project Group 05</h1>
+            <button class="btn-success" onclick="alert('Launch Create Event workflow...')">📅 Create Event</button>
+        </div>
+
+        <div class="alert-banner">
+            <strong>🔥 Current (Soonest) Event:</strong> Milestone 2 Submission Sync (This Friday)
+        </div>
+
+        <div>
+            <h3 style="margin-top:0">Active Group Events</h3>
+            <div class="event-card">
+                <div>
+                    <strong style="font-size:16px;">Sync Review Session</strong><br/>
+                    <small style="color:#64748b">Tomorrow at 4:00 PM</small>
+                </div>
+                <div class="btn-group">
+                    <button class="btn-go" onclick="alert('Marked as: Going')">Going</button>
+                    <button class="btn-nogo" onclick="alert('Marked as: Can\'t Go')">Can't Go</button>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <h3>Group Member Roster & Current RSVPs</h3>
+            <ul class="roster-list">
+                <li class="roster-item">
+                    <span>👤 Alice (You)</span> <span style="color:#22c55e; font-weight:bold;">Going</span>
+                </li>
+                <li class="roster-item">
+                    <span>👤 Bob</span> <span style="color:#eab308; font-weight:bold;">Pending RSVP</span>
+                </li>
+                <li class="roster-item">
+                    <span>👤 Charlie</span> <span style="color:#ef4444; font-weight:bold;">Can't Go</span>
+                </li>
+            </ul>
+        </div>
+
+        <a href="index.html" style="color: #0284c7; font-weight: bold; text-decoration: none;">← Back to Main Dashboard</a>
+    </div>
+
+</body>
+</html>
