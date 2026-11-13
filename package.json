@@ -11,7 +11,6 @@
     "start": "tsx src/app.ts",
     "build": "tsc",
     "dev": "tsx watch src/app.ts",
-    "db:init": "tsx src/db/init.ts",
     "migrate:up": "tsx src/db/migrator.ts up",
     "migrate:down": "tsx src/db/migrator.ts down",
     "test:watch": "vitest",
@@ -41,14 +40,23 @@
     "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
+    "@types/supertest": "^6.0.3",
+    "eslint": "^10.14.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "supertest": "^6.3.4",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^1.6.1"
   },
   "allowScripts": {
     "bcrypt@6.0.0": true,
