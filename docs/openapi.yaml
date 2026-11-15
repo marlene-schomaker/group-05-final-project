@@ -22,6 +22,7 @@ tags:
   - name: Auth
   - name: Account
   - name: Home
+  - name: Schedule
   - name: Groups
   - name: Group invites
   - name: Events
@@ -232,6 +233,44 @@ paths:
                   message: { type: string }
                   ticketId: { type: integer }
         '400': { $ref: '#/components/responses/ValidationError' }
+
+  /api/schedule:
+    get:
+      tags: [Schedule]
+      summary: My Schedule page, reusable weekly availability
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Hours free per weekday (24 hour HH:00 strings, one hour each)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WeeklySchedule' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Schedule]
+      summary: Replace the weekly availability
+      description: Accepts 09:00 or 9:00 AM style hours. Days left out are cleared.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WeeklySchedule' }
+      responses:
+        '200':
+          description: Saved schedule, normalised
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WeeklySchedule' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [Schedule]
+      summary: Clear the weekly availability
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Cleared }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 
   /api/home:
     get:
@@ -866,6 +905,16 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
   schemas:
+    WeeklySchedule:
+      type: object
+      required: [availability]
+      properties:
+        availability:
+          type: object
+          description: Keys are Monday to Sunday
+          additionalProperties:
+            type: array
+            items: { type: string, example: '09:00' }
     Error:
       type: object
       properties:

@@ -12,6 +12,7 @@ import groupsRoutes from './modules/groups/groups.routes.js';
 import eventsRoutes from './modules/events/events.routes.js';
 import notificationsRoutes from './modules/notifications/notifications.routes.js';
 import homeRoutes from './modules/home/home.routes.js';
+import scheduleRoutes from './modules/schedule/schedule.routes.js';
 import supportRoutes from './modules/support/support.routes.js';
 import groupInvitesRoutes from './modules/invites/invites.routes.js';
 
@@ -45,6 +46,7 @@ app.use('/api/groups', groupsRoutes);
 app.use('/api', eventsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/home', homeRoutes);
+app.use('/api/schedule', scheduleRoutes);
 app.use('/api/group-invites', groupInvitesRoutes);
 app.use('/api/support', supportRoutes);
 

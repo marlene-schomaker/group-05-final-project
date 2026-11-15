@@ -85,7 +85,7 @@ Migrations live in `src/db/migrations`. Add a new file there and register it in 
 
 ## Schema
 
-`001_initial_schema` is the team's original six-table schema. `002_huddle_schema` upgrades it in place: existing users are kept (`id` becomes `user_id`, a `name` is filled in from the email), and the unused scheduling tables are replaced with the tables the API needs (groups with roles, events with invitations, availability blocks, notifications, preferences, refresh tokens, group invites, support tickets and an email outbox). `npm run migrate:down` restores the original six tables. `docs/erd` still shows the original schema and has not been updated.
+`001_initial_schema` is the team's original six-table schema. `002_huddle_schema` upgrades it in place: existing users are kept (`id` becomes `user_id`, a `name` is filled in from the email), and the unused scheduling tables are replaced with the tables the API needs (groups with roles, events with invitations, availability blocks, notifications, preferences, refresh tokens, group invites, support tickets and an email outbox). `003_weekly_availability` adds the table behind the My Schedule page. `npm run migrate:down` restores the original six tables when run to the start. `docs/erd` still shows the original schema and has not been updated.
 
 ## Tests
 
@@ -149,6 +149,7 @@ Summary (all routes are under `/api` and need a bearer token unless noted):
 | Auth          | `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout` (these four need no token), `GET /auth/me`                             |
 | Account       | `GET` and `PUT /account/profile`, `GET` and `PUT /account/preferences`                                                                                      |
 | Home          | `GET /home`                                                                                                                                                 |
+| My Schedule   | `GET`, `PUT` and `DELETE /schedule` (reusable weekly availability: `{"availability":{"Monday":["09:00","13:00"]}}`, hours as `09:00` or `9:00 AM`)          |
 | Groups        | `GET /groups`, `POST /groups`, `GET`, `PUT`, `DELETE /groups/{id}`, `POST /groups/{id}/invites`, `DELETE` and `PATCH /groups/{id}/members/{userId}`         |
 | Group invites | `GET /group-invites`, `POST /group-invites/{id}/accept`, `POST /group-invites/{id}/decline`                                                                 |
 | Events        | `GET` and `POST /groups/{groupId}/events`, `GET` and `DELETE /events/{id}`, `PUT /events/{id}/respond`, `GET` and `POST /events/{id}/availability`          |

@@ -5,6 +5,7 @@ import {
   createHuddleTables,
   createUsersTable,
 } from '../src/db/migrations/002_huddle_schema.js';
+import { createWeeklyAvailabilityTable } from '../src/db/migrations/003_weekly_availability.js';
 import { setDb } from '../src/db/database.js';
 
 export async function setupTestDb(): Promise<Kysely<Database>> {
@@ -33,6 +34,7 @@ export async function setupTestDb(): Promise<Kysely<Database>> {
 
   await createUsersTable(testDb as never);
   await createHuddleTables(testDb as never);
+  await createWeeklyAvailabilityTable(testDb as never);
   setDb(testDb);
   return testDb;
 }

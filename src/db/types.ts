@@ -25,6 +25,7 @@ export interface Database {
   group_invites: GroupInvitesTable;
   email_outbox: EmailOutboxTable;
   support_tickets: SupportTicketsTable;
+  weekly_availability: WeeklyAvailabilityTable;
 }
 
 export interface UsersTable {
@@ -156,4 +157,11 @@ export interface EmailOutboxTable {
   body: string;
   status: Generated<string>;
   created_at: Generated<Date>;
+}
+
+export interface WeeklyAvailabilityTable {
+  slot_id: Generated<number>;
+  user_id: number;
+  day_of_week: number;
+  start_hour: number;
 }
