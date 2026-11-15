@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Migrator, Migration, MigrationProvider, Kysely } from 'kysely';
-import * as initialSchema from './migrations/001_initial_schema.js';
+import { migrations } from './migrations/index.js';
 import { db } from './database.js';
 import dotenv from 'dotenv';
 
@@ -9,9 +9,7 @@ dotenv.config();
 export function createMigrator(database: Kysely<any> = db): Migrator {
   const provider: MigrationProvider = {
     async getMigrations(): Promise<Record<string, Migration>> {
-      return {
-        '001_initial_schema': initialSchema,
-      };
+      return migrations;
     },
   };
 

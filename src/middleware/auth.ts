@@ -1,25 +1,49 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+import type { Request, Response, NextFunction } from 'express';
+import { verifyAccessToken, type TokenPayload } from '../utils/jwt.js';
+import { AppError } from './error-handler.js';
 
 export interface AuthenticatedRequest extends Request {
-    user?: {user_id: number; email: string};
+  user?: TokenPayload;
 }
 
-export function verifyJWT(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-    const authHeader = req.headers.authorization;
+function readBearer(req: Request): string | null {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) return null;
+  return header.slice('Bearer '.length).trim() || null;
+}
 
-    if(!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({error: "Unauthorized: MIssing or invalid token header"});
-    }
-    const token = authHeader.split(' ')[1];
+export function authenticate(
+  req: AuthenticatedRequest,
+  _res: Response,
+  next: NextFunction,
+) {
+  const token = readBearer(req);
+  if (!token) {
+    return next(new AppError('Missing or invalid Authorization header', 401));
+  }
 
+  try {
+    req.user = verifyAccessToken(token);
+    next();
+  } catch {
+    next(new AppError('Invalid or expired token', 401));
+  }
+}
+
+export function optionalAuthenticate(
+  req: AuthenticatedRequest,
+  _res: Response,
+  next: NextFunction,
+) {
+  const token = readBearer(req);
+  if (token) {
     try {
-        const payload  = jwt.verify(token, JWT_SECRET) as {user_id: number, email: string};
-        req.user = payload;
-        next();
-    } catch(err) {
-        return res.status(401).json({ error: "Unauthorized: Invalid or expired token"})
+      req.user = verifyAccessToken(token);
+    } catch {
+      // invalid token on an optional route is treated as anonymous
     }
+  }
+  next();
 }
+
+export const verifyJWT = authenticate;
