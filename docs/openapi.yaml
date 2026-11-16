@@ -1,0 +1,1084 @@
+openapi: 3.0.3
+info:
+  title: Huddle API
+  version: 1.0.0
+  description: |
+    Backend for Huddle, a group scheduling app. Users belong to groups. Members create events
+    with a minimum duration and a minimum number of people, invite people by email, and invitees
+    mark the times they are free. An event is confirmed once enough people overlap for long enough.
+
+    Conventions
+    - All routes are under /api and speak JSON.
+    - Auth is also mounted at /api/v1/auth (the original path) with the same behavior.
+    - Authenticated routes need `Authorization: Bearer <accessToken>`.
+    - Request bodies and most responses use camelCase. Two account responses return the
+      database column names (snake_case): `GET/PUT /account/profile`.
+    - Every error has the shape `{ "error": { "code", "message", "details?" } }`.
+    - Availability times have no time zone. They are stored as written and interpreted as UTC,
+      and confirmed event times are returned as ISO 8601 UTC timestamps.
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: Auth
+  - name: Account
+  - name: Home
+  - name: Schedule
+  - name: Groups
+  - name: Group invites
+  - name: Events
+  - name: Notifications
+  - name: Support
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Server is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  timestamp: { type: string, format: date-time }
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Create an account
+      description: Also attaches any event or group invitations previously sent to this email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                  description: Optional. Defaults to the part of the email before the @.
+                email: { type: string, format: email }
+                password: { type: string, minLength: 6 }
+      responses:
+        '201': { $ref: '#/components/responses/AuthSuccess' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/AuthSuccess' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Exchange a refresh token for a new pair (the old refresh token is revoked)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: New tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke a refresh token (sign out)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Token owner
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Decoded token payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      user_id: { type: integer }
+                      email: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/account/profile:
+    get:
+      tags: [Account]
+      summary: Current profile (Account page)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Profile (snake_case column names)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Account]
+      summary: Update display name and email
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 100 }
+                email: { type: string, format: email }
+                avatarColor: { type: string }
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/account/preferences:
+    get:
+      tags: [Account]
+      summary: Notification switches (Event invites, Event confirmed, Also send email)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Preferences
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Preferences' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Account]
+      summary: Update notification switches
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Preferences' }
+      responses:
+        '200':
+          description: Updated preferences
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Preferences' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/support/contact:
+    post:
+      tags: [Support]
+      summary: Contact support (open to signed-out visitors)
+      description: Sends a bearer token optionally. When valid, the ticket is linked to the user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, subject, message]
+              properties:
+                email: { type: string, format: email }
+                subject: { type: string, maxLength: 200 }
+                message: { type: string, maxLength: 2000 }
+      responses:
+        '201':
+          description: Ticket created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  ticketId: { type: integer }
+        '400': { $ref: '#/components/responses/ValidationError' }
+
+  /api/schedule:
+    get:
+      tags: [Schedule]
+      summary: My Schedule page, reusable weekly availability
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Hours free per weekday (24 hour HH:00 strings, one hour each)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WeeklySchedule' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Schedule]
+      summary: Replace the weekly availability
+      description: Accepts 09:00 or 9:00 AM style hours. Days left out are cleared.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WeeklySchedule' }
+      responses:
+        '200':
+          description: Saved schedule, normalised
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WeeklySchedule' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [Schedule]
+      summary: Clear the weekly availability
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Cleared }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/home:
+    get:
+      tags: [Home]
+      summary: Everything the home page shows
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Dashboard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  groups:
+                    type: array
+                    description: Horizontal list of the user's groups
+                    items: { $ref: '#/components/schemas/GroupCard' }
+                  invites:
+                    type: array
+                    description: '"Waiting on you" - event invitations not yet answered'
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer, description: Event id }
+                        groupId: { type: integer }
+                        name: { type: string, example: Saturday study session }
+                        group:
+                          {
+                            type: string,
+                            example: 'Study Crew, invited by Ava',
+                          }
+                        rule:
+                          {
+                            type: string,
+                            example: 'At least 2 hr, needs 4 people',
+                          }
+                        actionUrl: { type: string }
+                  groupInvites:
+                    type: array
+                    items: { $ref: '#/components/schemas/GroupInvite' }
+                  upcoming:
+                    type: array
+                    description: '"Coming up" - confirmed future events'
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        groupId: { type: integer }
+                        dow: { type: string, example: FRI }
+                        day: { type: string, example: '13' }
+                        name: { type: string }
+                        meta:
+                          {
+                            type: string,
+                            example: 'Friday Pickup Soccer, 6:30 PM to 8:00 PM',
+                          }
+                  unreadNotificationsCount: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/groups:
+    get:
+      tags: [Groups]
+      summary: The user's groups (home page cards)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/GroupCard' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Groups]
+      summary: Create a group (the creator becomes Admin)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 150 }
+                description: { type: string, maxLength: 500 }
+                color: { $ref: '#/components/schemas/GroupColor' }
+                inviteEmails:
+                  type: array
+                  description: Optional. Creates pending invitations. Invitees must accept.
+                  items: { type: string, format: email }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  name: { type: string }
+                  description: { type: string, nullable: true }
+                  color: { $ref: '#/components/schemas/GroupColor' }
+                  initial: { type: string }
+                  bg: { type: string }
+                  fg: { type: string }
+                  membersCount: { type: integer }
+                  role: { type: string, example: Admin }
+                  invited:
+                    type: array
+                    items: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/groups/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Groups]
+      summary: Group page (members only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Group, its members and its events
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroupDetails' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Groups]
+      summary: Update a group (Admin only)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                color: { $ref: '#/components/schemas/GroupColor' }
+      responses:
+        '200':
+          description: Updated group row
+          content:
+            application/json:
+              schema: { type: object }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [Groups]
+      summary: Delete a group (Admin only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/groups/{id}/invites:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Groups]
+      summary: Invite people to a group by email (any member)
+      description: |
+        People with an account get an in-app notification and must accept. People without an
+        account are emailed, and the invite attaches to their account when they sign up or log in.
+        `POST /api/groups/{id}/members` is kept as an alias.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [emails]
+              properties:
+                emails:
+                  type: array
+                  minItems: 1
+                  items: { type: string, format: email }
+      responses:
+        '200':
+          description: Outcome per address
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invited: { type: array, items: { type: string } }
+                  alreadyMembers: { type: array, items: { type: string } }
+                  alreadyInvited: { type: array, items: { type: string } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/groups/{id}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - name: userId
+        in: path
+        required: true
+        schema: { type: integer }
+    delete:
+      tags: [Groups]
+      summary: Leave the group (self) or remove a member (Admin)
+      description: The last admin cannot be removed (409).
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    patch:
+      tags: [Groups]
+      summary: Change a member's role (Admin only)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [Admin, Member] }
+      responses:
+        '200':
+          description: Updated role
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId: { type: integer }
+                  role: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/group-invites:
+    get:
+      tags: [Group invites]
+      summary: Pending group invitations for the user
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Invitations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/GroupInvite' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/group-invites/{id}/accept:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Group invites]
+      summary: Accept an invitation (joins the group, notifies the inviter)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/GroupInviteResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/group-invites/{id}/decline:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Group invites]
+      summary: Decline an invitation
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/GroupInviteResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/groups/{groupId}/events:
+    parameters:
+      - name: groupId
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Events]
+      summary: Events in a group (members only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/EventCard' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Events]
+      summary: Create an event and invite people (any group member)
+      description: |
+        The creator counts as attending. Invited emails are lowercased and deduplicated, and the
+        creator's own address is ignored. `minAttendees` cannot exceed the invited people plus the
+        creator. People with an account are notified in the app, and everyone without one is emailed.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, minDurationMinutes, minAttendees]
+              properties:
+                name: { type: string, maxLength: 200 }
+                minDurationMinutes:
+                  { type: integer, minimum: 15, maximum: 1440, example: 120 }
+                minAttendees:
+                  { type: integer, minimum: 1, maximum: 50, example: 4 }
+                inviteEmails:
+                  type: array
+                  items: { type: string, format: email }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  groupId: { type: integer }
+                  name: { type: string }
+                  minDurationMinutes: { type: integer }
+                  minAttendees: { type: integer }
+                  status: { type: string, example: Waiting for people }
+                  invitedCount: { type: integer }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/events/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Events]
+      summary: Event details
+      description: Visible to the creator, anyone invited to the event, and members of its group.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Event
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventDetails' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Events]
+      summary: Cancel an event (creator or group Admin)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  status: { type: string, example: Cancelled }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/events/{id}/respond:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    put:
+      tags: [Events]
+      summary: Say yes or no to an invitation (invitees only)
+      description: Saying no removes the person's availability and can move a confirmed event back to waiting.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [response]
+              properties:
+                response: { type: string, enum: [yes, no] }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/events/{id}/availability:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Events]
+      summary: The caller's availability and the current best overlap
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Availability
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slots:
+                    type: array
+                    items: { $ref: '#/components/schemas/Slot' }
+                  overlap:
+                    type: object
+                    nullable: true
+                    description: Earliest window with enough people for long enough, or null
+                    properties:
+                      start: { type: string, format: date-time }
+                      end: { type: string, format: date-time }
+                  status: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Events]
+      summary: Replace the caller's free times (creator and invitees only)
+      description: |
+        Marks the person as attending. After every change the server looks for a window where at
+        least `minAttendees` people are free together for at least `minDurationMinutes`. If one
+        exists the event becomes Confirmed and everyone involved is notified. If a confirmed event
+        loses its window it goes back to Waiting for people.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slots]
+              properties:
+                slots:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [date, startTime, endTime]
+                    properties:
+                      date: { type: string, example: '2099-03-14' }
+                      startTime: { type: string, example: '12:00' }
+                      endTime: { type: string, example: '15:00' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  slotsCount: { type: integer }
+                  status: { type: string }
+                  confirmedStartTime:
+                    { type: string, format: date-time, nullable: true }
+                  confirmedEndTime:
+                    { type: string, format: date-time, nullable: true }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/notifications:
+    get:
+      tags: [Notifications]
+      summary: Notifications page
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: filter
+          in: query
+          schema: { type: string, enum: [all, invites, updates], default: all }
+      responses:
+        '200':
+          description: Notifications, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Notification' }
+                  unreadCount: { type: integer }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: Badge count for the bell
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unreadCount: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/notifications/mark-all-read:
+    post:
+      tags: [Notifications]
+      summary: Mark all as read
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  markedReadCount: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/notifications/{id}/read:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    patch:
+      tags: [Notifications]
+      summary: Mark one notification as read
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  isRead: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+  responses:
+    AuthSuccess:
+      description: Signed in
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              user:
+                type: object
+                properties:
+                  id: { type: integer }
+                  name: { type: string }
+                  email: { type: string }
+                  avatarColor: { type: string }
+              token:
+                {
+                  type: string,
+                  description: Same value as accessToken. Kept for clients written against the original auth routes.,
+                }
+              accessToken: { type: string }
+              refreshToken: { type: string }
+    Message:
+      description: Done
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+    GroupInviteResult:
+      description: Done
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              id: { type: integer }
+              groupId: { type: integer }
+              status: { type: string, enum: [accepted, declined] }
+    ValidationError:
+      description: Request failed validation
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing, invalid or expired credentials
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Authenticated but not allowed (for example, not a member of the group)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource does not exist (or is not visible to you)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: State conflict (duplicate email, already answered, last admin, cancelled event)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    WeeklySchedule:
+      type: object
+      required: [availability]
+      properties:
+        availability:
+          type: object
+          description: Keys are Monday to Sunday
+          additionalProperties:
+            type: array
+            items: { type: string, example: '09:00' }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: VALIDATION_ERROR
+              description: One of VALIDATION_ERROR, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, RATE_LIMITED, INVALID_JSON, INTERNAL_ERROR
+            message: { type: string }
+            details:
+              type: array
+              description: Present for validation errors
+              items:
+                type: object
+                properties:
+                  field: { type: string, example: body.email }
+                  message: { type: string }
+    GroupColor:
+      type: string
+      enum: [blue, green, amber, pink, violet]
+    Profile:
+      type: object
+      properties:
+        user_id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        avatar_color: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Preferences:
+      type: object
+      properties:
+        prefInvites: { type: boolean, description: Event invites }
+        prefConfirmed: { type: boolean, description: Event confirmed }
+        prefEmail: { type: boolean, description: Also send email }
+    GroupCard:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string, example: Friday Pickup Soccer }
+        description: { type: string, nullable: true }
+        initial: { type: string, example: F }
+        membersLabel: { type: string, example: 14 members }
+        memberCount: { type: integer }
+        next: { type: string, example: 'Next: Fri 6:30 PM' }
+        bg: { type: string, example: '#DFF5EA' }
+        fg: { type: string, example: '#1B6B45' }
+        color: { $ref: '#/components/schemas/GroupColor' }
+        role: { type: string, enum: [Admin, Member] }
+    GroupDetails:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        initial: { type: string }
+        membersLabel: { type: string }
+        bg: { type: string }
+        fg: { type: string }
+        color: { $ref: '#/components/schemas/GroupColor' }
+        role: { type: string, description: The caller's role }
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              name: { type: string, description: '"You" for the caller' }
+              displayName: { type: string }
+              email: { type: string }
+              role: { type: string, enum: [Admin, Member] }
+              initial: { type: string }
+              bg: { type: string }
+              fg: { type: string }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/EventCard' }
+    GroupInvite:
+      type: object
+      properties:
+        id: { type: integer }
+        groupId: { type: integer }
+        groupName: { type: string }
+        invitedBy: { type: string }
+        createdAt: { type: string, format: date-time }
+    EventCard:
+      type: object
+      properties:
+        id: { type: integer }
+        groupId: { type: integer }
+        name: { type: string }
+        status:
+          type: string
+          description: Shown on the status pill. "Needs your reply" is computed for the caller.
+          enum: [Waiting for people, Needs your reply, Confirmed, Cancelled]
+        pillBg: { type: string }
+        pillFg: { type: string }
+        duration: { type: string, example: At least 2 hours }
+        minDurationMinutes: { type: integer }
+        minAttendees: { type: integer }
+        people: { type: string, example: Needs 4 people }
+        pct: { type: string, example: 50% }
+        progress: { type: string, example: 2 of 4 said yes }
+        yesCount: { type: integer }
+        confirmedStartTime: { type: string, format: date-time, nullable: true }
+        confirmedEndTime: { type: string, format: date-time, nullable: true }
+        invitesCount: { type: integer }
+    EventDetails:
+      allOf:
+        - $ref: '#/components/schemas/EventCard'
+        - type: object
+          properties:
+            groupName: { type: string }
+            isCreator: { type: boolean }
+            myResponse:
+              type: string
+              nullable: true
+              enum: [pending, yes, no]
+            invites:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: integer }
+                  email: { type: string }
+                  name: { type: string }
+                  response: { type: string, enum: [pending, yes, no] }
+                  isYou: { type: boolean }
+    Slot:
+      type: object
+      properties:
+        date: { type: string, example: '2099-03-14' }
+        startTime: { type: string, example: '12:00:00' }
+        endTime: { type: string, example: '15:00:00' }
+    Notification:
+      type: object
+      properties:
+        id: { type: integer }
+        type:
+          type: string
+          enum:
+            [
+              event_invite,
+              group_invite,
+              event_confirmed,
+              event_status,
+              member_joined,
+              system,
+            ]
+        icon: { type: string, example: '@' }
+        title: { type: string }
+        body: { type: string }
+        when: { type: string, example: 12 minutes ago }
+        createdAt: { type: string, format: date-time }
+        action: { type: string, example: Pick your times }
+        actionUrl: { type: string, nullable: true }
+        groupId: { type: integer, nullable: true }
+        eventId: { type: integer, nullable: true }
+        isRead: { type: boolean }
+        bg: { type: string }
+        fg: { type: string }
+        border: { type: string }
+        dot: { type: string }
+        btnBg: { type: string }
+        btnFg: { type: string }
